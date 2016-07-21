@@ -93,3 +93,6 @@ The folder-subfolder-files format is taylored to be backwards compatible with ap
 that the deployment may be done via appzip also. The goal is to create an seemles IDE integration,
 eventualy online web based, that will allow developers to be proficient with couchapp
 development and implementation.
+
+
+Some interesting ideas here: http://blog.couchbase.com/2015/october/bulk-operations-using-couchbase-and-golang
