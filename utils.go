@@ -16,6 +16,7 @@ func FileExists(file_name string) (bool, error) {
 	return true, err
 }
 
+//List files in a directory
 func ListDir(dir_name string) ([]string, error) {
 	var result []string
 
@@ -33,6 +34,7 @@ func ListDir(dir_name string) ([]string, error) {
 	return result, err
 }
 
+//Read ETag of a HEAD response from CouchDB
 func ETag(db, doc string) (string, error) {
 	var result string
 

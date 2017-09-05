@@ -46,7 +46,6 @@ Usage of ./acdc:
 
 ## AC:zap:DC folder mappings
 
-
 The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB `Database->Document` possible candidates.
 The main folder structure is:
 
