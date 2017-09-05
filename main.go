@@ -21,21 +21,6 @@ import (
 	"github.com/philippfranke/multipart-related/related"
 )
 
-type CouchDoc map[string]interface{}
-
-/*
-attachment_relative_path : {
-	file_name,
-	mime_type,
-	length
-}
-*/
-type DocList []map[string]struct {
-	File_Name    string
-	Content_Type string
-	Byte_Length  int64
-}
-
 const (
 	MPBoundary     = "5u93-0"
 	MPContent_Type = "application/json"
@@ -57,7 +42,16 @@ var (
 
 	pwd string
 
-	DDocFileds = []string{"_attachments", "_views", "_lists", "_shows", "_updates", "_filters", "_rewrites", "validate_doc_update", "_fulltext"}
+	DDocFileds = []string{
+		"_attachments",
+		"_views",
+		"_lists",
+		"_shows",
+		"_updates",
+		"_filters",
+		"_rewrites",
+		"validate_doc_update",
+		"_fulltext"}
 )
 
 //Save multipart/related document in CouchDB
@@ -225,7 +219,7 @@ func Pull() {
 	   the existing local files are overwritten
 	   Mandatory parameters
 	   db [database_name]
-	   ddoc [array_of_ddocs]
+	   ddoc [array_of_ddocs], comma separated no spaces
 	----------------------------------------------------------------------- */
 	//Check mandatory parameters
 	if len(DBName) == 0 {
@@ -367,12 +361,11 @@ func Pull() {
 func Push() {
 	/*
 		0) get input parameters: directory, server URL
-		   directory name -> projetct name
-		   subdirectory_level_1 -> database name
-		   subdirectory_level_2 -> document name
-		   subdirectory_level_3 -> document attributes
+		   directory name -> database name
+		   subdirectory_level_1 -> document name
+		   subdirectory_level_2 -> attributes name
 		1) recognize document structure: data, attachments,
-		   design doc features (views, lists, libs, shows, rewrites, validate_doc_update, update, index etc).
+		   design doc fields (views, lists, libs, shows, rewrites, validate_doc_update, update, index etc).
 		2) build document
 		3) save document
 	*/
@@ -409,7 +402,7 @@ func Push() {
 	}
 	fmt.Println(workingDB.Name())
 
-	//For each database folder
+	//In database folder
 	//Check for documents folders
 	//Check for design documents structure
 	//Check for attachemnts structure
