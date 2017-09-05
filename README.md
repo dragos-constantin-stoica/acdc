@@ -8,6 +8,7 @@ that are dealing with couchapp format. The main difference is that **AC**:zap:**
 the attachments in a multi-part related document rateher than file by file this will create a single version of the design document.
 
 A couchapp has the following properties:
+
 - it is a WEB application writent in JavaScript
 - it may be a SPA application with all attachments to a single design document. By convention `_design/app`
 - it is served directly from CouchDB
@@ -62,7 +63,7 @@ There are 3 types of CouchDB documents:
 1. Design
 1. Local
 
-### 0) Local documents
+### Local documents
 
 They are not replicated/synchronized and they are not subject to map/reduce
 in views. In order to use a local document one must address it directly.
@@ -80,9 +81,10 @@ The folder mapping will be:
 ```
 [DATABASE]
 	|_ [DOCUMENT_NAME]
-		|_ local_doc.json
+		|_ doc.json
 ```
 
+The `doc.json` file must contain at least the `_id` attribute.
 
 ### Normal documents
 
@@ -92,7 +94,6 @@ map/reduce mechanism of views. Those documents are replicated. Special fields:
 ```json
 {
 	"_id" : "[STRING]",
-	"_rev": "#-[DOCUMENT MD5]",
 	"_attachments" : { ... "file_attachments" ...}
 }
 ```
@@ -106,7 +107,7 @@ The folder mapping will be:
 		|_ attachments
 			|_ ... files and foldres
 ```
-
+The `doc.json` file must contain at least the `_id` attribute.
 
 ### Design documents
 
@@ -117,7 +118,6 @@ fields:
 ```json
 {
 	"_id" : "_design/[DOCUMENT_NAME]",
-	"_rev" : "#-[DOCUMENT MD5]",
 	"_attachments" : {"file_attachments"},
 	"views" : {
 		"view_name":{
@@ -145,7 +145,7 @@ The folder structure of a design document will be:
 ```
 [DATABASE]
 	|_ [DOCUMENT_NAME]
-		|_ design_document.json
+		|_ doc.json
 		|_ attachments
 			|_ ... files and folders
 		|_ views
@@ -165,6 +165,8 @@ The folder structure of a design document will be:
 		|_ rewrites.js
 		|_ validate_doc_update.js
 ```
+
+The `doc.json` file must contain at least the `_id` attribute.
 
 ## How does it work?
 
