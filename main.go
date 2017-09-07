@@ -29,6 +29,8 @@ var (
 
 	pwd string //working directory for relative paths
 
+	attachments_list []string //list with attachment files
+
 )
 
 func main() {

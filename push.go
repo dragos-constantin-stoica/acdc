@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"net/textproto"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/Jeffail/gabs"
@@ -24,24 +26,19 @@ const (
 //also it must be part of replication mechanism
 
 /*
- document structure:
+content of the document to be posted:
 
 --5u93-0
 content-type: application/json
 
 {
-	"attribute_0": "value",
-	...
-
 	"_attachments": {
 		"attachment_relative_path/filename: {
 			"follows":true,
 			"content_type":"detect_mime_type_from_file_extension",
 			"length": bytes
 		},
-
 	...
-
 	}
 }
 
@@ -55,114 +52,92 @@ Content-type: detect_mime_Type_from_file_extension
 ...
 --5u93-0--
 */
-func SaveMPRDoc(doc_name string) {
+func SaveMPRDoc(doc_name string, attachments_path string) {
 
 	//Build documents list for attachments
 	//search _attachments folder and use it
 	//as starting base for the relative path
 
-	//Build CouchDB specific design documents structure
-	//views, libs, lists, shows, filters, updates,
-
 	//Build the JSON part
 	CDBDoc := gabs.New()
-	CDBDoc.Set(true, "_attachments", "pufi.png", "follows")
-	CDBDoc.Set("image/png", "_attachments", "pufi.png", "content_type")
-	//Get attachement length in bytes
-	CDBDoc.Set(3010, "_attachments", "pufi.png", "length")
 
-	//fmt.Println(doc_name, CDBDoc.String())
+	//for all files in the current folder contsruct and object
+	//repeat for subfolders
+	attachments_list = []string{}
+	BuildJSONforAttachments(attachments_path, CDBDoc)
 
-	//add a text part
-	CDBDoc.Set(true, "_attachments", "salam/de/sibiu/text.txt", "follows")
-	CDBDoc.Set("text/plain", "_attachments", "salam/de/sibiu/text.txt", "content_type")
-	CDBDoc.Set(10, "_attachments", "salam/de/sibiu/text.txt", "length")
+	if DEBUG {
+		fmt.Println(doc_name, CDBDoc.String())
+	}
 
+	//Create the multipart/related document
 	b := &bytes.Buffer{}
 	w := related.NewWriter(b)
 	w.SetBoundary(MPBoundary)
 
 	rootPart, err := w.CreateRoot("", MPContent_Type, nil)
 	if err != nil {
-		panic(err)
+		fmt.Print(err)
 	}
 	//Write JSON to document
 	rootPart.Write([]byte(CDBDoc.String()))
-
-	//Construct attached parts
 	header := make(textproto.MIMEHeader)
-	header.Set("Content-Type", "image/png") //\r\nContent-transfer-encoding: binary")
-	nextPart, err := w.CreatePart("", header)
-	if err != nil {
-		panic(err)
-	}
 
-	// Add your image file
-	file := "logo.png"
-	f, err := os.Open(file)
-	if err != nil {
-		return
-	}
-	defer f.Close()
+	for _, child := range attachments_list {
+		//Construct attached parts
+		header.Set("Content-Type", mime.TypeByExtension(path.Ext(child))) //\r\nContent-transfer-encoding: binary")
+		nextPart, err := w.CreatePart("", header)
+		if err != nil {
+			fmt.Print(err)
+		}
 
-	data, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(err)
-	}
-	nextPart.Write(data)
+		// Add file content
+		f, err := os.Open(child)
+		if err != nil {
+			fmt.Print(err)
+		}
 
-	//continue with text part
-	header.Set("Content-Type", "plain/text")
-	nextPart, err = w.CreatePart("", header)
-	if err != nil {
-		panic(err)
+		data, err := ioutil.ReadAll(f)
+		if err != nil {
+			fmt.Print(err)
+		}
+		nextPart.Write(data)
+		f.Close()
+
 	}
-	nextPart.Write([]byte("0123456789"))
 
 	if err := w.Close(); err != nil {
-		panic(err)
+		fmt.Print(err)
 	}
 
 	//fmt.Printf("The compound Object Content-Type:\n %s \n", w.FormDataContentType())
-	if Verbose {
+	if DEBUG {
 		fmt.Println("+-------+")
 		fmt.Printf("Body: \n %s", b.String())
 		fmt.Println("+-------+")
 	}
 
-	serverConnection, err := couchdb.NewClient(ServerURL, nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-	workingDB, err := serverConnection.EnsureDB("apptest") //(DBDir)
-	if err != nil {
-		fmt.Println(err)
-	}
+	//Save the document to CouchDB database
+	targetUrl := ServerURL + "/" + DBName + "/" + doc_name
 
-	rev, err := workingDB.Rev("pufi")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	targetUrl := "http://127.0.0.1:5984/apptest/" + doc_name
-
-	if len(rev) > 0 {
+	if rev, err = workingDB.Rev(doc_name); err == nil {
 		targetUrl += "?rev=" + rev
 	}
+
 	request, err := http.NewRequest("PUT", targetUrl, b)
 
-	request.SetBasicAuth("root", "root")
+	//request.SetBasicAuth("root", "root")
 	request.Header.Set("Content-Type", "multipart/related;boundary="+MPBoundary)
 	request.Close = true
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		panic(err)
+		fmt.Print(err)
 	}
 	defer response.Body.Close()
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		panic(err)
+		fmt.Print(err)
 	}
 
 	if Verbose {
@@ -177,13 +152,13 @@ func SaveMPRDoc(doc_name string) {
 }
 
 //Upsert a document to CouchDB
-func upsert(doc CouchDoc) (string, error) {
-	if rev, err := workingDB.Rev(doc["_id"].(string)); err == nil {
+func upsert(doc CouchDoc) (result string, err error) {
+	if rev, err = workingDB.Rev(doc["_id"].(string)); err == nil {
 		return workingDB.Put(doc["_id"].(string), doc, rev)
 	} else if couchdb.NotFound(err) {
 		return workingDB.Put(doc["_id"].(string), doc, "")
 	} else {
-		return "", err
+		return result, err
 	}
 }
 
@@ -214,18 +189,8 @@ func Push() {
 		fmt.Printf("Database name: %s\n", DBName)
 	}
 
-	//Check for manifest.json file
-	is_file, err := FileExists(filepath.Join(pwd, "manifest.json"))
-	if is_file {
-		if Verbose {
-			fmt.Println("An AppZip repository - maybe?!?")
-		}
-		//This may be an appzip repository
-		//TODO - implement appzip repository structure processing and push
-	}
-
 	//Check for database on CouchDB server
-	serverConnection, err = couchdb.NewClient(ServerURL, nil)
+	serverConnection, err := couchdb.NewClient(ServerURL, nil)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -245,9 +210,8 @@ func Push() {
 	}
 	for _, doc := range doc_list {
 		//Check for doc.json file and _id field inside
-		is_file, err = FileExists(filepath.Join(pwd, DBName, doc, "doc.json"))
-		var tmpDoc CouchDoc
-		if is_file {
+		tmpDoc := make(map[string]interface{})
+		if is_file, err := FileExists(filepath.Join(pwd, DBName, doc, "doc.json")); is_file {
 			if Verbose {
 				fmt.Printf("Found doc.json file in %s\n", doc)
 			}
@@ -256,18 +220,18 @@ func Push() {
 				fmt.Print(err)
 			}
 			if tmpDoc["_id"] == nil {
-				fmt.Printf("The doc.json does not contain field _id. Found %s\n", tmpDoc)
+				fmt.Printf("The doc.json does not contain field _id. Found %s. Skipping folder.\n", tmpDoc)
+				continue
 			} else {
 				fmt.Printf("Read %s\n", tmpDoc)
 			}
-
 		}
 
 		//Check for design documents structure:
 		//rewrites, validate_doc_update, filters, shows, updates, lists, views, fulltext
 
 		//rewrites may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "rewrites.js")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "rewrites.js")); is_file {
 			if Verbose {
 				fmt.Printf("Found rewrites.js file in %s\n", doc)
 			}
@@ -279,7 +243,7 @@ func Push() {
 		}
 
 		//validate_doc_update may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "validate_doc_update.js")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "validate_doc_update.js")); is_file {
 			if Verbose {
 				fmt.Printf("Found validate_doc_update.js file in %s\n", doc)
 			}
@@ -291,7 +255,7 @@ func Push() {
 		}
 
 		//filters may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "filters")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "filters")); is_file {
 			if Verbose {
 				fmt.Printf("Found filters folder in %s\n", doc)
 			}
@@ -316,7 +280,7 @@ func Push() {
 		}
 
 		//shows may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "shows")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "shows")); is_file {
 			if Verbose {
 				fmt.Printf("Found shows folder in %s\n", doc)
 			}
@@ -341,7 +305,7 @@ func Push() {
 		}
 
 		//updates may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "updates")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "updates")); is_file {
 			if Verbose {
 				fmt.Printf("Found updates folder in %s\n", doc)
 			}
@@ -366,7 +330,7 @@ func Push() {
 		}
 
 		//lists may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "lists")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "lists")); is_file {
 			if Verbose {
 				fmt.Printf("Found lists folder in %s\n", doc)
 			}
@@ -391,7 +355,7 @@ func Push() {
 		}
 
 		//fulltext may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "updates")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "updates")); is_file {
 			if Verbose {
 				fmt.Printf("Found fulltext folder in %s\n", doc)
 			}
@@ -417,7 +381,7 @@ func Push() {
 		}
 
 		//views may be written directly inside doc.json
-		if is_file, _ = FileExists(filepath.Join(pwd, DBName, doc, "views")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "views")); is_file {
 			if Verbose {
 				fmt.Printf("Found views folder in %s\n", doc)
 			}
@@ -441,9 +405,6 @@ func Push() {
 					tmpViews[view_name] = vn
 				}
 				tmpViews[view_name][view_type], err = loadFile(filepath.Join(pwd, DBName, doc, "views", source_file))
-				if DEBUG {
-					fmt.Print("View data %s\n", tmpViews)
-				}
 				if err != nil {
 					fmt.Print(err)
 				}
@@ -456,11 +417,18 @@ func Push() {
 		if err != nil {
 			fmt.Printf("%s", err.Error())
 		}
-		fmt.Printf("rev: %s\n", rev)
+		fmt.Printf("new document saved with rev: %s\n", rev)
 
 		//Check for attachemnts folder
-		//Save multipart/related document to CouchDB
-		//SaveMPRDoc("pufi")
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "_attachments")); is_file {
+			if Verbose {
+				fmt.Printf("Found _attachments folder in %s\n", doc)
+			}
+			//inside _attachment folder there are files and folders
+			//each file will be saved via a multipart/related document
+			//the root path starts in _attachment subfolder
+			SaveMPRDoc(tmpDoc["_id"].(string), filepath.Join(pwd, DBName, doc, "_attachments"))
+		}
 
 	}
 
