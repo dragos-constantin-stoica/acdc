@@ -70,7 +70,6 @@ func BuildJSONforAttachments(folder string, DDoc *gabs.Container) {
 
 		// get the size
 		DDoc.Set(fileinfo.Size(), "_attachments", relativePath+tmpFile, "length")
-		attachments_list = append([]string{path.Join(folder, tmpFile)}, attachments_list...)
 	}
 
 	//For each subfolder repeat the procedure
@@ -178,6 +177,19 @@ func loadFile(file string) (string, error) {
 		return "", err
 	}
 	return string(bytes.Trim(data, " \n\r")), nil
+}
+
+//Save any structure to a file in JSON format
+func SaveJsonFile(v interface{}, path string) {
+	fo, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
+	defer fo.Close()
+	e := json.NewEncoder(fo)
+	if err := e.Encode(v); err != nil {
+		panic(err)
+	}
 }
 
 //Read ETag of a HEAD response from CouchDB

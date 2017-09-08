@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"mime"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/Jeffail/gabs"
 	"github.com/fjl/go-couchdb"
@@ -52,14 +55,20 @@ Content-type: detect_mime_Type_from_file_extension
 ...
 --5u93-0--
 */
-func SaveMPRDoc(doc_name string, attachments_path string) {
+func SaveMPRDoc(doc CouchDoc, attachments_path string) {
 
+	doc_name := doc["_id"].(string)
 	//Build documents list for attachments
 	//search _attachments folder and use it
 	//as starting base for the relative path
 
 	//Build the JSON part
-	CDBDoc := gabs.New()
+	oo := &bytes.Buffer{}
+	enc := json.NewEncoder(oo)
+	if err := enc.Encode(&doc); err != nil {
+		fmt.Println(err)
+	}
+	CDBDoc, err := gabs.ParseJSON(oo.Bytes())
 
 	//for all files in the current folder contsruct and object
 	//repeat for subfolders
@@ -80,8 +89,13 @@ func SaveMPRDoc(doc_name string, attachments_path string) {
 		fmt.Print(err)
 	}
 	//Write JSON to document
-	rootPart.Write([]byte(CDBDoc.String()))
+	tmpDDocString := CDBDoc.String()
+	rootPart.Write([]byte(tmpDDocString))
 	header := make(textproto.MIMEHeader)
+
+	q := regexp.MustCompile(":\\{.*?\\}")
+	tmpDDocString = strings.Replace(strings.Replace(tmpDDocString, "}}", "", -1), "{\"_attachments\":{", "", -1)
+	attachments_list := strings.Split(strings.Replace(q.ReplaceAllString(tmpDDocString, ""), "\"", "", -1), ",")
 
 	for _, child := range attachments_list {
 		//Construct attached parts
@@ -92,7 +106,7 @@ func SaveMPRDoc(doc_name string, attachments_path string) {
 		}
 
 		// Add file content
-		f, err := os.Open(child)
+		f, err := os.Open(path.Join(attachments_path, child))
 		if err != nil {
 			fmt.Print(err)
 		}
@@ -108,13 +122,6 @@ func SaveMPRDoc(doc_name string, attachments_path string) {
 
 	if err := w.Close(); err != nil {
 		fmt.Print(err)
-	}
-
-	//fmt.Printf("The compound Object Content-Type:\n %s \n", w.FormDataContentType())
-	if DEBUG {
-		fmt.Println("+-------+")
-		fmt.Printf("Body: \n %s", b.String())
-		fmt.Println("+-------+")
 	}
 
 	//Save the document to CouchDB database
@@ -412,13 +419,6 @@ func Push() {
 			tmpDoc["views"] = tmpViews
 		}
 
-		//Upsert to CouchDB
-		rev, err = upsert(tmpDoc)
-		if err != nil {
-			fmt.Printf("%s", err.Error())
-		}
-		fmt.Printf("new document saved with rev: %s\n", rev)
-
 		//Check for attachemnts folder
 		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "_attachments")); is_file {
 			if Verbose {
@@ -427,7 +427,14 @@ func Push() {
 			//inside _attachment folder there are files and folders
 			//each file will be saved via a multipart/related document
 			//the root path starts in _attachment subfolder
-			SaveMPRDoc(tmpDoc["_id"].(string), filepath.Join(pwd, DBName, doc, "_attachments"))
+			SaveMPRDoc(tmpDoc, filepath.Join(pwd, DBName, doc, "_attachments"))
+		} else {
+			//Upsert to CouchDB
+			rev, err = upsert(tmpDoc)
+			if err != nil {
+				fmt.Printf("%s", err.Error())
+			}
+			fmt.Printf("new document saved with rev: %s\n", rev)
 		}
 
 	}
