@@ -19,34 +19,44 @@ A couchapp has the following properties:
 ## Examples of usage
 
 ```
-./acdc -pull -db test_db -URL http://localhost:5984/
+./acdc pull -db test_db -URL http://localhost:5984/
 
-./acdc -push -db test_db -URL http://192.168.0.69:5984/
+./acdc push -db test_db -URL http://192.168.0.69:5984/
 ```
 
 #### Command line parameters
 
 ```
-Usage of ./acdc:
-  -URL URL
-    	specify full URL to access CouchDB server (default "http://root:root@localhost:5984/")
-  -db database
-    	database name to be pulled
-  -ddoc design documents
-    	 list of design documents IDs to be pulled, list is comma separated
-  -project directory
-    	full path to project directory where databases are stored (default "/home/dragos/acdc")
-  -pull
-    	sync documents from CouchDB to local directory
-  -push
-    	sync local directory with CouchDB documents
+Usage
+	acdc {pull | push | help} parameters... 
+
+ acdc pull -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]
+  -URL string
+    	Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required) (default "http://localhost:5984/")
+  -db string
+    	Database name to be pulled from. (Required)
+  -ddoc string
+    	List of comma separated design documents IDs to be pulled.
   -verbose
-    	verbose mode
+    	Verbose mode.
+
+ acdc push -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]
+  -URL string
+    	Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required) (default "http://localhost:5984/")
+  -db string
+    	Database name to be pushed to. (Required)
+  -ddoc string
+    	List of comma separated design documents IDs to be pushed.
+  -verbose
+    	Verbose mode.
+
+ acdc help
+	Print this message.
 ```
 
 ## AC:zap:DC folder mappings
 
-The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB `Database->Document` possible candidates.
+The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB structure based on the assumption: `Database->Document`, where the main folder is the database name the subfolders are documents.
 The main folder structure is:
 
 ```	
@@ -55,12 +65,11 @@ The main folder structure is:
 	    |_ [DOCUMENT]
 ```
 
-The top folder is considered to be the database. Each subfolder is considered to be a document.
 There are 3 types of CouchDB documents:  
 
+1. Local
 1. Normal
 1. Design
-1. Local
 
 ### Local documents
 
@@ -79,7 +88,7 @@ The folder mapping will be:
 
 ```
 [DATABASE]
-	|_ [DOCUMENT_NAME]
+	|_ [DOCUMENT_FOLDER]
 		|_ doc.json
 ```
 
@@ -101,7 +110,7 @@ The folder mapping will be:
 
 ```
 [DATABASE]
-	|_ [DOCUMENT_NAME]
+	|_ [DOCUMENT_FOLDER]
 		|_ doc.json
 		|_ attachments
 			|_ ... files and foldres
@@ -143,14 +152,14 @@ The folder structure of a design document will be:
 
 ```
 [DATABASE]
-	|_ [DOCUMENT_NAME]
+	|_ [DOCUMENT_FOLDER]
 		|_ doc.json
 		|_ attachments
 			|_ ... files and folders
 		|_ views
-			|_ [VIEW_NAME]_map.js
-			|_ [VIEW_NAME]_reduce.js
-			|_ [LIB_NAME].js
+			|_ [VIEW_NAME].map.js
+			|_ [VIEW_NAME].reduce.js
+			|_ [LIB_NAME].[FUNCTION_NAME].js
 		|_ lists
 			|_ [LIST_NAME].js
 		|_ shows
@@ -169,14 +178,33 @@ The `doc.json` file must contain at least the `_id` attribute.
 
 ## How does it work?
 
-The push mechanism will parse recursivelly all subfolders of the database folder, and will be considered as documents. For each folder representing a document
-a multipart-related document will be created and pushed to CouchDB. The files `.json` will be read and pushed as such.
+The push mechanism will parse recursivelly all subfolders of the database folder, seraching for `doc.json` file and then for specific files and subfolders. For each folder representing a document
+a multipart-related document will be created and pushed to CouchDB, if `_attachments` folder is present and contains files and subfolders. The file `doc.json` will be read and pushed as such.
 
 The pull mechanism consist in inspecting a single given database for design documents
-and to download on local drive in a given folder structure the attachments and special
-fields as source code files. Pull function will be able to get only a specified document.
+and downloads them on local drive. It will create a given folder structure, copmatible with push command.
 
-The goal is to create a seemles IDE integration that will allow developers to be proficient with couchapp
-development and implementation.
+The goal is to create a seemles IDE integration that will allow developers to be proficient with couchapp development and implementation.
 
 Some interesting ideas here: http://blog.couchbase.com/2015/october/bulk-operations-using-couchbase-and-golang
+
+### Some use cases
+
+#### 1. Clone an exising couchapp from a remote database to local folder
+
+You already have a couchapp running on `demo.server.com` CouchDB server in the database `mygreatapp`. You want to clone the design documents from that serve to a local folder in order to develop the application. 
+
+Make a project subfolder, let say `couchapp_project` and copy the `acdc` application there, then:
+
+```bash
+cd couchapp_project
+./acdc pull -db mygreatapp -URL http://demo.server.com:5984/
+```
+
+#### 2. Push changes to remote database from local folder
+
+Suppose that you have already done use case 1., above. After done coding on local files, then:
+
+```bash
+./acdc push -db mygreatapp -URL http://demo.server.com:5984/
+```
