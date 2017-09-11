@@ -2,26 +2,52 @@
 **A**nother application **C**onnector for couchapp **D**evelopers with **C**ouchDB
 
 I fully agree this is not English but the acronym sounds cool ... **AC**:zap:**DC**  
-It allows the developers to pull couchapp-lications from CouchDB to local folders, to edit them,
-and to push from local folders back to CouchDB. There is a great tool couchapp and its successor erica
-that are dealing with couchapp format. The main difference is that **AC**:zap:**DC** pushes
-the attachments in a multi-part related document rateher than file by file this will create a single version of the design document.
+It allows the developers to pull couchapplications from CouchDB to local folders, to edit them,
+and to push from local folders back to CouchDB. There is a great tool called [couchapp](https://github.com/couchapp/couchapp) and its successor [erica](https://github.com/benoitc/erica)
+that are dealing with couchapp format. The main difference is that **AC**:zap:**DC** simplifies a lot the structure on disk of a couchapp and pushes
+the attachments in a multipart related document rateher than file by file this will create a single version of the document.
 
 A couchapp has the following properties:
 
 - it is a WEB application writent in JavaScript
 - it may be a SPA application with all attachments to a single design document. By convention `_design/app`
 - it is served directly from CouchDB
-- it may use any framework (JQuery, DHTMLX, Webix, Framework7, W2UI, EasyUI, Bootstrap etc) for UI and data manipulation
+- it may use any framework (JQuery, DHTMLX, Webix, Framework7, Polymer, Bootstrap etc) for UI and data manipulation
 - it exchanges data between client's browser and CouchDB via AJAX or it can use PouchDB for offline activity
 - it may contain fields related to CouchDB design documents (views, lists etc)
+
+## How to clone and compile
+
+You need to have pre-installed on your machie:
+- [CouchDB](http://couchdb.apache.org/) on your local machine or use a virtualized container like: Docker, Vaagrant, etc
+- [Go lang](https://golang.org/) verions 1.9 installed on your machine
+- Git tool in order to clone git repository
+
+Open a terminal and start typing:
+
+```
+git clone https://github.com/iqcouch/acdc
+cd acdc
+./build.sh
+acdc -help
+```
+
+If you see the following message:
+
+```
+push or pull subcommand is required. help command for more details.
+```
+
+it means that you mangaged to clone and compile **AC**:zap:**DC** successfully. Congratulations!!!
+
+
 
 ## Examples of usage
 
 ```
 ./acdc pull -db test_db -URL http://localhost:5984/
 
-./acdc push -db test_db -URL http://192.168.0.69:5984/
+./acdc push -db test_db -URL http://localhost:5984/
 ```
 
 #### Command line parameters
@@ -30,23 +56,23 @@ A couchapp has the following properties:
 Usage
 	acdc {pull | push | help} parameters... 
 
- acdc pull -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]
+ acdc pull -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]
   -URL string
     	Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required) (default "http://localhost:5984/")
   -db string
     	Database name to be pulled from. (Required)
-  -ddoc string
-    	List of comma separated design documents IDs to be pulled.
+  -docs string
+    	List of comma separated document IDs to be pulled.
   -verbose
     	Verbose mode.
 
- acdc push -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]
+ acdc push -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]
   -URL string
     	Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required) (default "http://localhost:5984/")
   -db string
     	Database name to be pushed to. (Required)
-  -ddoc string
-    	List of comma separated design documents IDs to be pushed.
+  -docs string
+    	List of comma separated document IDs to be pushed.
   -verbose
     	Verbose mode.
 
@@ -56,7 +82,10 @@ Usage
 
 ## AC:zap:DC folder mappings
 
-The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB structure based on the assumption: `Database->Document`, where the main folder is the database name the subfolders are documents.
+The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB structure based on the assumption that folder structure maps to CouchDB structure as follows: `Database->Document`, where the main folder is the database name the subfolders are documents.
+
+A good example of such a folder to database coduments mapping is in **test_db** subfolder. So, please have a looke there and let us know if you have any questions.
+
 The main folder structure is:
 
 ```	
@@ -74,7 +103,7 @@ There are 3 types of CouchDB documents:
 ### Local documents
 
 They are not replicated/synchronized and they are not subject to map/reduce
-in views. In order to use a local document one must address it directly.
+in views. The `_id` of the document must start with **_local/**. In order to use a local document one must address it directly.
 Local documents do no have versioning - an inplace update is applied.
 Special field:  
 
@@ -120,7 +149,7 @@ The `doc.json` file must contain at least the `_id` attribute.
 ### Design documents
 
 They are used to store mainly processing scripts: views, lists, shows etc and to
-store couchapps: web applications that are directly served from CouchDB. Special
+store couchapps: web applications stored as attachments and are directly served from CouchDB. Special
 fields:
 
 ```json

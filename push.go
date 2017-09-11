@@ -70,9 +70,8 @@ func SaveMPRDoc(doc CouchDoc, attachments_path string) {
 	}
 	CDBDoc, err := gabs.ParseJSON(oo.Bytes())
 
-	//for all files in the current folder contsruct and object
-	//repeat for subfolders
-	attachments_list = []string{}
+	//for all files in the current folder construct an object
+	//repeat for subfolders the procedure
 	BuildJSONforAttachments(attachments_path, CDBDoc)
 
 	if DEBUG {
@@ -153,8 +152,8 @@ func SaveMPRDoc(doc CouchDoc, attachments_path string) {
 		for key, value := range hdr {
 			fmt.Println("   ", key, ":", value)
 		}
-		fmt.Println(string(contents))
 	}
+	fmt.Printf("new multipart/related document saved %s", string(contents))
 
 }
 
@@ -187,37 +186,20 @@ func Push() {
 			3) upsert document to CouchDB
 	*/
 
-	//Get connection URL
-	if DEBUG {
-		fmt.Printf("URL: %s\n", ServerURL)
-	}
-	//Get database directory
-	if DEBUG {
-		fmt.Printf("Database name: %s\n", DBName)
-	}
-
-	//Check for database on CouchDB server
-	serverConnection, err := couchdb.NewClient(ServerURL, nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-	workingDB, err = serverConnection.EnsureDB(DBName)
-	if err != nil {
-		fmt.Println(err)
-	}
-	if DEBUG {
-		fmt.Printf("Working with %s database.\n", workingDB.Name())
-	}
-
 	//In database folder
 	//Check for documents folders
 	doc_list, err := ListDir(filepath.Join(pwd, DBName))
 	if Verbose {
 		fmt.Printf("Document folders: %s\n", doc_list)
 	}
+	docs := strings.Split(DocsList, ",")
+	if len(docs[0]) == 0 {
+		docs = []string{}
+	}
 	for _, doc := range doc_list {
 		//Check for doc.json file and _id field inside
-		tmpDoc := make(map[string]interface{})
+		var tmpDoc CouchDoc
+		tmpDoc = make(map[string]interface{})
 		if is_file, err := FileExists(filepath.Join(pwd, DBName, doc, "doc.json")); is_file {
 			if Verbose {
 				fmt.Printf("Found doc.json file in %s\n", doc)
@@ -230,8 +212,18 @@ func Push() {
 				fmt.Printf("The doc.json does not contain field _id. Found %s. Skipping folder.\n", tmpDoc)
 				continue
 			} else {
-				fmt.Printf("Read %s\n", tmpDoc)
+				fmt.Printf("Read %s", tmpDoc.toJSON())
+				//Check if the document is in input document list
+				if len(docs) > 0 {
+					if ok, _ := in_array(tmpDoc["_id"], docs); !ok {
+						fmt.Printf("Document %s not in docs list. Skipping doc.\n", tmpDoc["_id"])
+						continue
+					}
+				}
 			}
+		} else {
+			fmt.Println("doc.json not found in folder ", doc)
+			continue
 		}
 
 		//Check for design documents structure:

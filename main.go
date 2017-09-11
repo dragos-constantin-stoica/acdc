@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	DEBUG = true //TODO - change to false in PROD
+	DEBUG = false //TODO - change to true in DEV mode
 )
 
 var (
 	ServerURL   string //full URL: PROTOCOL://USER:PASSWORD@SERVER:PORT/
 	DBName      string //database name to push to and to pull from
-	DDocList    string //desing documents list, comma separated
+	DocsList    string //desing documents list, comma separated
 	Verbose     bool   //verbose flag
 	OP_Function bool   //the operation to be triggered
 
@@ -29,11 +29,35 @@ var (
 
 	pwd string //working directory for relative paths
 
-	attachments_list []string //list with attachment files
-
 )
 
 func main() {
+
+	//Get connection URL
+	if DEBUG {
+		fmt.Printf("URL: %s\n", ServerURL)
+	}
+	//Get database directory
+	if DEBUG {
+		fmt.Printf("Database name: %s\n", DBName)
+	}
+
+	//Check for database on CouchDB server
+	serverConnection, err := couchdb.NewClient(ServerURL, nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf("Connection to server %s is working.\n", ServerURL)
+
+	workingDB, err = serverConnection.EnsureDB(DBName)
+	if err != nil {
+		fmt.Println(err)
+		//Create the database if not exists, it might be the case for the first time push
+		workingDB, _ = serverConnection.CreateDB(DBName)
+		fmt.Printf("Database %s created.\n", DBName)
+	} else {
+		fmt.Printf("Working with %s database.\n", workingDB.Name())
+	}
 
 	if OP_Function {
 		Push()
@@ -57,20 +81,20 @@ func init() {
 	pushCommand := flag.NewFlagSet("push", flag.ExitOnError)
 	pullCommand := flag.NewFlagSet("pull", flag.ExitOnError)
 
-	// push -db -URL [-ddoc] [-v]
-	// pull -db -URL [-ddoc] [-v]
+	// push -db -URL [-docs] [-v]
+	// pull -db -URL [-docs] [-v]
 	// help
 
 	// push subcommand flag pointers
 
 	pushServerURL := pushCommand.String("URL", "http://localhost:5984/", "Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required)")
 	pushDBName := pushCommand.String("db", "", "Database name to be pushed to. (Required)")
-	pushDDocList := pushCommand.String("ddoc", "", "List of comma separated design documents IDs to be pushed.")
+	pushDocsList := pushCommand.String("docs", "", "List of comma separated document IDs to be pushed.")
 	pushVerbose := pushCommand.Bool("verbose", false, "Verbose mode.")
 
 	pullServerURL := pullCommand.String("URL", "http://localhost:5984/", "Full URL to access CouchDB server in the format PROTOCOL://USER:PASSWORD@SERVER:PORT/. (Required)")
 	pullDBName := pullCommand.String("db", "", "Database name to be pulled from. (Required)")
-	pullDDocList := pullCommand.String("ddoc", "", "List of comma separated design documents IDs to be pulled.")
+	pullDocsList := pullCommand.String("docs", "", "List of comma separated document IDs to be pulled.")
 	pullVerbose := pullCommand.Bool("verbose", false, "Verbose mode.")
 
 	switch os.Args[1] {
@@ -81,9 +105,9 @@ func init() {
 		OP_Function = false
 		pullCommand.Parse(os.Args[2:])
 	case "help":
-		fmt.Println("Usage\n\tacdc {pull | push | help} parameters... \n\n acdc pull -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]")
+		fmt.Println("Usage\n\tacdc {pull | push | help} parameters... \n\n acdc pull -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]")
 		pullCommand.PrintDefaults()
-		fmt.Println("\n acdc push -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]")
+		fmt.Println("\n acdc push -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]")
 		pushCommand.PrintDefaults()
 		fmt.Println("\n acdc help\n\tPrint this message.")
 
@@ -98,28 +122,28 @@ func init() {
 	if pushCommand.Parsed() {
 		// Required Flags
 		if (*pushServerURL == "") || (*pushDBName == "") {
-			fmt.Println("acdc push -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]")
+			fmt.Println("acdc push -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]")
 			pushCommand.PrintDefaults()
 			os.Exit(1)
 		}
 
 		ServerURL = *pushServerURL
 		DBName = *pushDBName
-		DDocList = *pushDDocList
+		DocsList = *pushDocsList
 		Verbose = *pushVerbose
 	}
 
 	if pullCommand.Parsed() {
 		// Required Flags
 		if (*pullServerURL == "") || (*pullDBName == "") {
-			fmt.Println("acdc pull -db <database> -URL <CouchDB_URL> [-ddoc <id,...>] [-v]")
+			fmt.Println("acdc pull -db <database> -URL <CouchDB_URL> [-docs <id,...>] [-v]")
 			pullCommand.PrintDefaults()
 			os.Exit(1)
 		}
 
 		ServerURL = *pullServerURL
 		DBName = *pullDBName
-		DDocList = *pullDDocList
+		DocsList = *pullDocsList
 		Verbose = *pullVerbose
 	}
 

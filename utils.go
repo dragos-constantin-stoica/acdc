@@ -10,10 +10,33 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/Jeffail/gabs"
 )
+
+//Check is a values is present in an array
+func in_array(val interface{}, array interface{}) (exists bool, index int) {
+	exists = false
+	index = -1
+
+	switch reflect.TypeOf(array).Kind() {
+	case reflect.Slice:
+		s := reflect.ValueOf(array)
+
+		for i := 0; i < s.Len(); i++ {
+			if reflect.DeepEqual(val, s.Index(i).Interface()) == true {
+				index = i
+				exists = true
+				return
+			}
+		}
+	}
+
+	return
+}
 
 //Check if a file exists - full path as argument
 func FileExists(file_name string) (bool, error) {
@@ -211,4 +234,49 @@ func ETag(db, doc string) (string, error) {
 	}
 
 	return result, nil
+}
+
+//Process pull attribute
+func attribute2file(tmpdoc CouchDoc, attr_name string, dir_path string) CouchDoc {
+
+	//Create the folder
+	is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path, attr_name))
+	if is_dir {
+		os.Remove(filepath.Join(pwd, DBName, dir_path, attr_name))
+	}
+	os.MkdirAll(filepath.Join(pwd, DBName, dir_path, attr_name), os.ModePerm)
+
+	for fct, _ := range tmpdoc[attr_name].(map[string]interface{}) {
+		//Create [update_name].js file
+		attr_file_path := filepath.Join(pwd, DBName, dir_path, attr_name, fct+".js")
+		is_dir, err := FileExists(attr_file_path)
+		if is_dir {
+			os.Remove(attr_file_path)
+		}
+
+		output, err := os.Create(attr_file_path)
+		if err != nil {
+			fmt.Println("Error while creating", attr_file_path, "-", err)
+		}
+		defer output.Close()
+		n, err := output.WriteString(tmpdoc[attr_name].(map[string]interface{})[fct].(string))
+		if err != nil {
+			fmt.Print("Error while writing ", fct, " function for ", attr_name, " -", err)
+		}
+		fmt.Printf("%s %v bytes written\n", fct, n)
+
+	}
+	delete(tmpdoc, attr_name)
+	return tmpdoc
+
+}
+
+//Transform CouchDBDoc structure to JSON
+func (doc *CouchDoc) toJSON() string {
+	o := &bytes.Buffer{}
+	enc := json.NewEncoder(o)
+	if err := enc.Encode(&doc); err != nil {
+		fmt.Println(err)
+	}
+	return o.String()
 }

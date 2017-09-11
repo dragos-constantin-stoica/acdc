@@ -11,9 +11,3 @@ type alldocsResult struct {
 	Offset    int
 	Rows      []map[string]interface{}
 }
-
-type DocList []map[string]struct {
-	File_Name    string
-	Content_Type string
-	Byte_Length  int64
-}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,37 +20,14 @@ func Pull() {
 	   the existing local files are overwritten
 	   Mandatory parameters
 	   db [database_name]
-	   ddoc [array_of_ddocs], comma separated no spaces
+	   docs [array_of_ddocs], comma separated no spaces
 	----------------------------------------------------------------------- */
 
-	//Get connection URL
-	if DEBUG {
-		fmt.Printf("URL: %s\n", ServerURL)
-	}
-	//Get database directory
-	if DEBUG {
-		fmt.Printf("Database name: %s\n", DBName)
-	}
-
-	//Check for database on CouchDB server
-	serverConnection, err := couchdb.NewClient(ServerURL, nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-	workingDB, err = serverConnection.EnsureDB(DBName)
-	if err != nil {
-		fmt.Println(err)
-	}
-	if DEBUG {
-		fmt.Printf("Working with %s database.\n", workingDB.Name())
-	}
-
-	var ddoc []string
-	//ddoc := strings.Split(DDocList, ",")
+	docs := strings.Split(DocsList, ",")
 
 	//Check local directory for pull destination
-	is_dir, err := FileExists(filepath.Join(pwd, DBName))
-	if is_dir {
+
+	if is_dir, _ := FileExists(filepath.Join(pwd, DBName)); is_dir {
 		fmt.Println("Found database folder on local disk!")
 	} else {
 		//create DB folder of local directory
@@ -60,20 +38,43 @@ func Pull() {
 		}
 	}
 	//Get design documents by default
-	//TODO - add DDocList processing to ddoc for specific documents
 
 	var result alldocsResult
-	err = workingDB.AllDocs(&result, couchdb.Options{
-		"startkey": "_design",
-		"endkey":   "_designZ",
-	})
 
+	if len(DocsList) == 0 {
+		docs = []string{}
+		//By default pull all _desgis docs
+		err := workingDB.AllDocs(&result, couchdb.Options{
+			"startkey": "_design",
+			"endkey":   "_designZ",
+		})
+		if err != nil {
+			fmt.Print(err)
+		}
+	} else {
+		//Pull only the docs specified, it may be any docs
+		docsArr, _ := json.Marshal(docs)
+		err := workingDB.AllDocs(&result, couchdb.Options{
+			"keys": string(docsArr),
+		})
+		if err != nil {
+			fmt.Print(err)
+		}
+	}
+	if DEBUG {
+		fmt.Println(result)
+	}
 	for _, val := range result.Rows {
-		ddoc = append(ddoc, val["id"].(string))
+		if val["id"] != nil {
+			docs = append(docs, val["id"].(string))
+		}
+		if val["error"] != nil {
+			fmt.Printf("%s - %s\n", val["key"], val["error"])
+		}
 	}
 
-	for _, one_doc := range ddoc {
-		//Check if ddoc exists in the database
+	for _, one_doc := range docs {
+		//Check if doc exists in the database
 		etag, err := ETag(DBName, one_doc)
 		if err != nil {
 			fmt.Println("Document " + one_doc + " not found in database")
@@ -81,7 +82,7 @@ func Pull() {
 		}
 		fmt.Println("Document " + one_doc + " found with rev:" + etag)
 		//Get the ddoc and 'serialize' it to local directory and files
-		dir_path := strings.Replace(one_doc, "_design/", "", -1)
+		dir_path := strings.Replace(strings.Replace(one_doc, "_local/", "", -1), "_design/", "", -1)
 		if is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path)); !is_dir {
 			if os.MkdirAll(filepath.Join(pwd, DBName, dir_path), os.ModePerm) != nil {
 				fmt.Println("Can not create subdirectory " + dir_path)
@@ -148,7 +149,6 @@ func Pull() {
 						os.Remove(view_file_path)
 					}
 					//os.MkdirAll(view_file_path, os.ModePerm)
-					//TODO - The extension should be determined by "language" attribute
 					output, err := os.Create(view_file_path)
 					if err != nil {
 						fmt.Println("Error while creating", view_file_path, "-", err)
@@ -182,7 +182,6 @@ func Pull() {
 					os.Remove(fulltext_file_path)
 				}
 				//os.MkdirAll(view_file_path, os.ModePerm)
-				//TODO - The extension should be determined by "language" attribute
 				output, err := os.Create(fulltext_file_path)
 				if err != nil {
 					fmt.Println("Error while creating", fulltext_file_path, "-", err)
@@ -208,7 +207,6 @@ func Pull() {
 				os.Remove(rewrites_file_path)
 			}
 			//os.MkdirAll(view_file_path, os.ModePerm)
-			//TODO - The extension should be determined by "language" attribute
 			output, err := os.Create(rewrites_file_path)
 			if err != nil {
 				fmt.Println("Error while creating", rewrites_file_path, "-", err)
@@ -233,7 +231,6 @@ func Pull() {
 				os.Remove(validate_doc_update_file_path)
 			}
 			//os.MkdirAll(view_file_path, os.ModePerm)
-			//TODO - The extension should be determined by "language" attribute
 			output, err := os.Create(validate_doc_update_file_path)
 			if err != nil {
 				fmt.Println("Error while creating", validate_doc_update_file_path, "-", err)
@@ -250,134 +247,22 @@ func Pull() {
 
 		//Handle updates
 		if tmpdoc["updates"] != nil {
-			//Create updates folder
-			is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path, "updates"))
-			if is_dir {
-				os.Remove(filepath.Join(pwd, DBName, dir_path, "updates"))
-			}
-			os.MkdirAll(filepath.Join(pwd, DBName, dir_path, "updates"), os.ModePerm)
-
-			for updates_fct, _ := range tmpdoc["updates"].(map[string]interface{}) {
-				//Create [update_name].js file
-				updates_file_path := filepath.Join(pwd, DBName, dir_path, "updates", updates_fct+".js")
-				is_dir, err := FileExists(updates_file_path)
-				if is_dir {
-					os.Remove(updates_file_path)
-				}
-				//os.MkdirAll(view_file_path, os.ModePerm)
-				//TODO - The extension should be determined by "language" attribute
-				output, err := os.Create(updates_file_path)
-				if err != nil {
-					fmt.Println("Error while creating", updates_file_path, "-", err)
-				}
-				defer output.Close()
-				n, err := output.WriteString(tmpdoc["updates"].(map[string]interface{})[updates_fct].(string))
-				if err != nil {
-					fmt.Print("Error while writing ", updates_fct, " function for updates -", err)
-				}
-				fmt.Printf("%s %v bytes written\n", updates_fct, n)
-
-			}
-			delete(tmpdoc, "updates")
+			tmpdoc = attribute2file(tmpdoc, "updates", dir_path)
 		}
 
 		//Handle lists
 		if tmpdoc["lists"] != nil {
-			//Create fulltext folder
-			is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path, "lists"))
-			if is_dir {
-				os.Remove(filepath.Join(pwd, DBName, dir_path, "lists"))
-			}
-			os.MkdirAll(filepath.Join(pwd, DBName, dir_path, "lists"), os.ModePerm)
-
-			for lists_fct, _ := range tmpdoc["lists"].(map[string]interface{}) {
-				//Create [update_name].js file
-				lists_file_path := filepath.Join(pwd, DBName, dir_path, "lists", lists_fct+".js")
-				is_dir, err := FileExists(lists_file_path)
-				if is_dir {
-					os.Remove(lists_file_path)
-				}
-				//os.MkdirAll(view_file_path, os.ModePerm)
-				//TODO - The extension should be determined by "language" attribute
-				output, err := os.Create(lists_file_path)
-				if err != nil {
-					fmt.Println("Error while creating", lists_file_path, "-", err)
-				}
-				defer output.Close()
-				n, err := output.WriteString(tmpdoc["lists"].(map[string]interface{})[lists_fct].(string))
-				if err != nil {
-					fmt.Print("Error while writing ", lists_fct, " function for lists -", err)
-				}
-				fmt.Printf("%s %v bytes written\n", lists_fct, n)
-
-			}
-			delete(tmpdoc, "lists")
+			tmpdoc = attribute2file(tmpdoc, "lists", dir_path)
 		}
 
 		//Handle shows
 		if tmpdoc["shows"] != nil {
-			//Create shows folder
-			is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path, "shows"))
-			if is_dir {
-				os.Remove(filepath.Join(pwd, DBName, dir_path, "shows"))
-			}
-			os.MkdirAll(filepath.Join(pwd, DBName, dir_path, "shows"), os.ModePerm)
-
-			for shows_fct, _ := range tmpdoc["shows"].(map[string]interface{}) {
-				//Create [update_name].js file
-				shows_file_path := filepath.Join(pwd, DBName, dir_path, "shows", shows_fct+".js")
-				is_dir, err := FileExists(shows_file_path)
-				if is_dir {
-					os.Remove(shows_file_path)
-				}
-				//os.MkdirAll(view_file_path, os.ModePerm)
-				//TODO - The extension should be determined by "language" attribute
-				output, err := os.Create(shows_file_path)
-				if err != nil {
-					fmt.Println("Error while creating", shows_file_path, "-", err)
-				}
-				defer output.Close()
-				n, err := output.WriteString(tmpdoc["shows"].(map[string]interface{})[shows_fct].(string))
-				if err != nil {
-					fmt.Print("Error while writing ", shows_fct, " function for shows -", err)
-				}
-				fmt.Printf("%s %v bytes written\n", shows_fct, n)
-
-			}
-			delete(tmpdoc, "shows")
+			tmpdoc = attribute2file(tmpdoc, "shows", dir_path)
 		}
 
 		//Handle filters
 		if tmpdoc["filters"] != nil {
-			//Create filters folder
-			is_dir, _ := FileExists(filepath.Join(pwd, DBName, dir_path, "filters"))
-			if is_dir {
-				os.Remove(filepath.Join(pwd, DBName, dir_path, "filters"))
-			}
-			os.MkdirAll(filepath.Join(pwd, DBName, dir_path, "filters"), os.ModePerm)
-
-			for filters_fct, _ := range tmpdoc["filters"].(map[string]interface{}) {
-				//Create [update_name].js file
-				filters_file_path := filepath.Join(pwd, DBName, dir_path, "filters", filters_fct+".js")
-				is_dir, err := FileExists(filters_file_path)
-				if is_dir {
-					os.Remove(filters_file_path)
-				}
-				//os.MkdirAll(view_file_path, os.ModePerm)
-				//TODO - The extension should be determined by "language" attribute
-				output, err := os.Create(filters_file_path)
-				if err != nil {
-					fmt.Println("Error while creating", filters_file_path, "-", err)
-				}
-				defer output.Close()
-				n, err := output.WriteString(tmpdoc["filters"].(map[string]interface{})[filters_fct].(string))
-				if err != nil {
-					fmt.Print("Error while writing ", filters_fct, " function for filters -", err)
-				}
-				fmt.Printf("%s %v bytes written\n", filters_fct, n)
-
-			}
-			delete(tmpdoc, "filters")
+			tmpdoc = attribute2file(tmpdoc, "filters", dir_path)
 		}
 
 		//The other fields will be dumped in doc.json
