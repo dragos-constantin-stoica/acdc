@@ -1,4 +1,5 @@
 # AC:zap:DC
+
 **A**nother application **C**onnector for couchapp **D**evelopers with **C**ouchDB
 
 I fully agree this is not English but the acronym sounds cool ... **AC**:zap:**DC**  
@@ -18,7 +19,8 @@ A couchapp has the following properties:
 
 ## How to clone and compile
 
-You need to have pre-installed on your machie:
+You need to have pre-installed on your machine:
+
 - [CouchDB](http://couchdb.apache.org/) on your local machine or use a virtualized container like: Docker, Vaagrant, etc
 - [Go lang](https://golang.org/) verions 1.9 installed on your machine
 - Git tool in order to clone git repository
@@ -39,8 +41,6 @@ push or pull subcommand is required. help command for more details.
 ```
 
 it means that you mangaged to clone and compile **AC**:zap:**DC** successfully. Congratulations!!!
-
-
 
 ## Examples of usage
 
