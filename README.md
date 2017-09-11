@@ -221,7 +221,7 @@ Some interesting ideas here: http://blog.couchbase.com/2015/october/bulk-operati
 
 #### 1. Clone an exising couchapp from a remote database to local folder
 
-You already have a couchapp running on `demo.server.com` CouchDB server in the database `mygreatapp`. You want to clone the design documents from that serve to a local folder in order to develop the application. 
+You already have a couchapp running on `demo.server.com` CouchDB server in the database `mygreatapp`. You want to clone the design documents from that serve to a local folder in order to develop the application.
 
 Make a project subfolder, let say `couchapp_project` and copy the `acdc` application there, then:
 
