@@ -354,7 +354,7 @@ func Push() {
 		}
 
 		//fulltext may be written directly inside doc.json
-		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "updates")); is_file {
+		if is_file, _ := FileExists(filepath.Join(pwd, DBName, doc, "fulltext")); is_file {
 			if Verbose {
 				fmt.Printf("Found fulltext folder in %s\n", doc)
 			}
