@@ -1,4 +1,4 @@
-# AC:zap:DC
+# AC :zap: DC
 
 **A**nother application **C**onnector for couchapp **D**evelopers with **C**ouchDB
 
@@ -80,7 +80,7 @@ Usage
 	Print this message.
 ```
 
-## AC:zap:DC folder mappings
+## AC :zap: DC folder mappings
 
 The application receive as input parameter the name of a local folder, having a specific structure. The appicaton will try to parse them as CouchDB structure based on the assumption that folder structure maps to CouchDB structure as follows: `Database->Document`, where the main folder is the database name the subfolders are documents.
 
